@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <libgen.h>
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -18,6 +19,9 @@
 #define MIN(A, B) (((A) > (B)) ? (B) : (A))
 
 int main(int argc, char **argv) {
+  //char tmp[200];
+  //getcwd(tmp, 100);
+  //printf("%s", tmp);
   int seed = -1;
   int array_size = -1;
   int pnum = -1;
@@ -110,18 +114,34 @@ int main(int argc, char **argv) {
   
   char *fn;
   int len = 0;
+  int pathlen;
   int pfds[2];
 
   if (with_files) 
   { 
     int num = pnum;
     while (num) {num = num / 10; len++;}
-    fn = malloc(sizeof(char) * (20 + len));
+
+    char* tmp;
+    tmp = malloc(sizeof(char) * strlen(argv[0]));
+    if (tmp == NULL)
+    {
+      printf("Malloc error!");
+      return 1;
+    }
+
+    strcpy(tmp, argv[0]);
+    char* dn = dirname(tmp);
+    pathlen = strlen(dn);
+
+    fn = malloc(sizeof(char) * (pathlen + 20 + len));
     if (fn == NULL)
     {
       printf("Malloc error!");
       return 1;
     }
+    strcpy(fn, dn);
+    free(tmp);
   }
   else
   {
@@ -140,16 +160,18 @@ int main(int argc, char **argv) {
         struct MinMax min_max = GetMinMax(array, i * part_size, MIN((i + 1) * part_size, array_size));
         if (with_files) {
           FILE* fp;
-          snprintf(fn, 20 + len, "parallel_data/part_%d", i);
+          snprintf(fn + pathlen, 20 + len, "/parallel_data/part_%d", i);
           fp = fopen(fn, "wb");
           if (fp == NULL) {
-            printf("File %s opening error!", fn);
+            printf("File %s opening error!\n", fn);
+            perror(NULL);
             return 1;
           }
           fwrite(&min_max, sizeof(min_max), 1, fp);
-          if (!fclose(fp))
+          if (fclose(fp) != 0)
           {
-            printf("File %s closing error!", fn);
+            printf("File %s closing error!\n", fn);
+            perror(NULL);
             return 1;
           }
         } else {
@@ -183,16 +205,16 @@ int main(int argc, char **argv) {
 
     if (with_files) {
       FILE* fp;
-      snprintf(fn, 20 + len, "parallel_data/part_%d", i);
+      snprintf(fn + pathlen, 20 + len, "/parallel_data/part_%d", i);
       fp = fopen(fn, "rb");
       if (fp == NULL) {
-        printf("File %s opening error!", fn);
+        printf("File %s opening error!\n", fn);
         return 1;
       }
       fread(&cur_min_max, sizeof(min_max), 1, fp);
-      if (!fclose(fp))
+      if (fclose(fp) != 0)
       {
-        printf("File %s closing error!", fn);
+        printf("File %s closing error!\n", fn);
         return 1;
       }
 
@@ -211,7 +233,7 @@ int main(int argc, char **argv) {
 
   double elapsed_time = (finish_time.tv_sec - start_time.tv_sec) * 1000.0;
   elapsed_time += (finish_time.tv_usec - start_time.tv_usec) / 1000.0;
-
+  free(fn);
   free(array);
 
   printf("Min: %d\n", min_max.min);
