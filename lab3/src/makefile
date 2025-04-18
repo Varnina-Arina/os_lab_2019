@@ -1,17 +1,22 @@
 CC=gcc
 CFLAGS=-I.
 
-sequential_min_max : utils.o find_min_max.o utils.h find_min_max.h
-	$(CC) -o sequential_min_max find_min_max.o utils.o sequential_min_max.c $(CFLAGS)
+all : ../bin/seq_min_max ../bin/par_min_max ../bin/exec_seq_min_max
 
-parallel_min_max : utils.o find_min_max.o utils.h find_min_max.h
-	$(CC) -o parallel_min_max utils.o find_min_max.o parallel_min_max.c $(CFLAGS)
+../bin/exec_seq_min_max: ../bin/seq_min_max
+	$(CC) -o ../bin/exec_seq_min_max exec_sequential_min_max.c
 
-utils.o : utils.h
-	$(CC) -o utils.o -c utils.c $(CFLAGS)
+../bin/seq_min_max : ../bin/utils.o ../bin/find_min_max.o utils.h find_min_max.h
+	$(CC) -o ../bin/seq_min_max ../bin/find_min_max.o ../bin/utils.o sequential_min_max.c $(CFLAGS)
 
-find_min_max.o : utils.h find_min_max.h
-	$(CC) -o find_min_max.o -c find_min_max.c $(CFLAGS)
+../bin/par_min_max : ../bin/utils.o ../bin/find_min_max.o utils.h find_min_max.h
+	$(CC) -o ../bin/par_min_max ../bin/utils.o ../bin/find_min_max.o parallel_min_max.c $(CFLAGS)
+
+../bin/utils.o : utils.h
+	$(CC) -o ../bin/utils.o -c utils.c $(CFLAGS)
+
+../bin/find_min_max.o : utils.h find_min_max.h
+	$(CC) -o ../bin/find_min_max.o -c find_min_max.c $(CFLAGS)
 
 clean :
-	rm utils.o find_min_max.o sequential_min_max parallel_min_max
+	rm ../bin/utils.o ../bin/find_min_max.o ../bin/seq_min_max ../bin/par_min_max ../bin/exec_seq_min_max
