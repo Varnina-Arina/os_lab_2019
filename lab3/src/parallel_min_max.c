@@ -15,6 +15,8 @@
 #include "find_min_max.h"
 #include "utils.h"
 
+#define MIN(A, B) (((A) > (B)) ? (B) : (A))
+
 int main(int argc, char **argv) {
   int seed = -1;
   int array_size = -1;
@@ -40,18 +42,24 @@ int main(int argc, char **argv) {
         switch (option_index) {
           case 0:
             seed = atoi(optarg);
-            // your code here
-            // error handling
+            if (seed <= 0) {
+              printf("seed is a positive number\n");
+              return 1;
+            }
             break;
           case 1:
             array_size = atoi(optarg);
-            // your code here
-            // error handling
+            if (array_size <= 0) {
+              printf("array_size is a positive number\n");
+              return 1;
+            }
             break;
           case 2:
             pnum = atoi(optarg);
-            // your code here
-            // error handling
+            if (pnum <= 0) {
+              printf("pnum is a positive number\n");
+              return 1;
+            }
             break;
           case 3:
             with_files = true;
@@ -85,26 +93,69 @@ int main(int argc, char **argv) {
   }
 
   int *array = malloc(sizeof(int) * array_size);
+  if (array == NULL)
+    {
+      printf("Malloc error!");
+      return 1;
+    }
   GenerateArray(array, array_size, seed);
+  //for (int i = 0; i < array_size; i++) printf("%d ", array[i]);
+  //printf("\n");
   int active_child_processes = 0;
 
   struct timeval start_time;
   gettimeofday(&start_time, NULL);
 
+  int part_size = array_size / pnum;
+  
+  char *fn;
+  int len = 0;
+  int pfds[2];
+
+  if (with_files) 
+  { 
+    int num = pnum;
+    while (num) {num = num / 10; len++;}
+    fn = malloc(sizeof(char) * (20 + len));
+    if (fn == NULL)
+    {
+      printf("Malloc error!");
+      return 1;
+    }
+  }
+  else
+  {
+    if (pipe(pfds) == -1) 
+    {
+      printf("Pipe opening error!");
+      return 1;
+    }
+  }
   for (int i = 0; i < pnum; i++) {
     pid_t child_pid = fork();
     if (child_pid >= 0) {
       // successful fork
       active_child_processes += 1;
       if (child_pid == 0) {
-        // child process
-
-        // parallel somehow
-
+        struct MinMax min_max = GetMinMax(array, i * part_size, MIN((i + 1) * part_size, array_size));
         if (with_files) {
-          // use files here
+          FILE* fp;
+          snprintf(fn, 20 + len, "parallel_data/part_%d", i);
+          fp = fopen(fn, "wb");
+          if (fp == NULL) {
+            printf("File %s opening error!", fn);
+            return 1;
+          }
+          fwrite(&min_max, sizeof(min_max), 1, fp);
+          if (!fclose(fp))
+          {
+            printf("File %s closing error!", fn);
+            return 1;
+          }
         } else {
-          // use pipe here
+          close(pfds[0]);
+          write(pfds[1], &min_max, sizeof(min_max));
+          close(pfds[1]);
         }
         return 0;
       }
@@ -114,10 +165,10 @@ int main(int argc, char **argv) {
       return 1;
     }
   }
+  close(pfds[1]);
 
   while (active_child_processes > 0) {
-    // your code here
-
+    wait(NULL);
     active_child_processes -= 1;
   }
 
@@ -126,18 +177,34 @@ int main(int argc, char **argv) {
   min_max.max = INT_MIN;
 
   for (int i = 0; i < pnum; i++) {
-    int min = INT_MAX;
-    int max = INT_MIN;
+    struct MinMax cur_min_max;
+    cur_min_max.min = INT_MAX;
+    cur_min_max.max = INT_MIN;
 
     if (with_files) {
-      // read from files
+      FILE* fp;
+      snprintf(fn, 20 + len, "parallel_data/part_%d", i);
+      fp = fopen(fn, "rb");
+      if (fp == NULL) {
+        printf("File %s opening error!", fn);
+        return 1;
+      }
+      fread(&cur_min_max, sizeof(min_max), 1, fp);
+      if (!fclose(fp))
+      {
+        printf("File %s closing error!", fn);
+        return 1;
+      }
+
     } else {
-      // read from pipes
+      read(pfds[0], &cur_min_max, sizeof(cur_min_max));
     }
 
-    if (min < min_max.min) min_max.min = min;
-    if (max > min_max.max) min_max.max = max;
+    if (cur_min_max.min < min_max.min) min_max.min = cur_min_max.min;
+    if (cur_min_max.max > min_max.max) min_max.max = cur_min_max.max;
   }
+
+  if (!with_files) close(pfds[0]); 
 
   struct timeval finish_time;
   gettimeofday(&finish_time, NULL);
